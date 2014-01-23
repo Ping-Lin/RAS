@@ -7,8 +7,5 @@ public class Test {
 		OutboundArea outboundArea = new OutboundArea();
 		Hump hump = new Hump(receivingArea, classificationArea, allTimer);
 		PullBack pullBack = new PullBack(classificationArea, outboundArea, allTimer);
-		
-		
 	}
-	
 }

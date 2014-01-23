@@ -23,9 +23,11 @@ public class ReceivingArea {
 	double counter;   //時間軸一開始初始為零
 	ReceivingTrack[] receivingTrack;
 	private Timer timer;
+	ArrayList<Train> finishTrain;   //紀錄離開receiving area的train資訊,在receive train結束的火車,當作紀錄用
 	
 	public ReceivingArea(){
 		trainSet = new ArrayList<Train>();   //初始化來的train，將其放到trainSet
+		finishTrain = new ArrayList<Train>();   //初始化
 		receivingTrack = new ReceivingTrack[Constants.RECEIVING_TRACKS_NUMBER];   //初始化receiving track
 		for(int i=0 ; i<receivingTrack.length ; i++)   //new 空間
 			receivingTrack[i] = new ReceivingTrack();
@@ -86,14 +88,14 @@ public class ReceivingArea {
 			e.printStackTrace();
 		}
 	}
-	
+
 	/**
 	 * timeTableAndBlockOutput會輸出timeTable 和 列車的block分布
 	 */
 	public void timeTableAndBlockOutput(){
 		try {
-			jxl.write.WritableWorkbook writeWorkBook = Workbook.createWorkbook(new File("outputFile1.xls"));   //要寫入的路徑以及檔名
-			jxl.write.WritableSheet writeSheet = writeWorkBook.createSheet("inbound_Train", 0);   //建立一個工作表名字，然後0表示為第一頁
+			jxl.write.WritableWorkbook writeWorkBook = Workbook.createWorkbook(new File("outputFile.xls"));   //要寫入的路徑以及檔名
+			jxl.write.WritableSheet writeSheet = writeWorkBook.createSheet("inbound_train", 0);   //建立一個工作表名字，然後0表示為第一頁
 
 			Label label = new Label(0, 0, "Inbound Train No.");   //設一個label, 並添加column major
 			writeSheet.addCell(label);   //將格子添加到表格
@@ -128,6 +130,67 @@ public class ReceivingArea {
 			e.printStackTrace();
 		}   
 	}
+	/**
+	 * inbound trains的細節內容輸出
+	 */
+	public void inboundTrainInfoOutput(){
+		try {
+			jxl.Workbook readWorkBook = jxl.Workbook.getWorkbook(new File("outputFile.xls"));   //唯讀的Excel工作薄物件
+			jxl.write.WritableWorkbook writeWorkBook = Workbook.createWorkbook(new File("outputFile.xls"), readWorkBook);   //要寫入的路徑以及檔名
+			jxl.write.WritableSheet writeSheet = writeWorkBook.createSheet("inbound_train_info", 1);   //建立一個工作表名字，然後0表示為第一頁
+
+			Label label = new Label(0, 0, "Inbound Train No");   //設一個label, 並添加(column major)
+			writeSheet.addCell(label);   //將格子添加到表格
+			writeSheet.addCell(new Label(1, 0, "Day No"));
+			writeSheet.addCell(new Label(2, 0, "Arriving time at receiving area"));
+			writeSheet.addCell(new Label(3, 0, "Receiving track No"));
+			writeSheet.addCell(new Label(4, 0, "Number of blocks"));
+			writeSheet.addCell(new Label(5, 0, "Number of cars"));
+			writeSheet.addCell(new Label(6, 0, "Destination of blocks (number of cars)"));
+			writeSheet.addCell(new Label(7, 0, "Starting time of humping job"));
+			writeSheet.addCell(new Label(8, 0, "Ending time of humping job"));
+			
+			BlockValues b = new BlockValues();   //輸出block values用
+			
+			for(int i=0, x=1; i<finishTrain.size() ; i++, x++){   //輸入每一筆火車的資料
+				writeSheet.addCell(new Label(0, x, finishTrain.get(i).inBoundTrainId));   //寫入火車編號
+				writeSheet.addCell(new Label(1, x, finishTrain.get(i).day));   //寫入到達日
+				writeSheet.addCell(new Label(2, x, finishTrain.get(i).arrivalTime));   //寫入到達時間
+				writeSheet.addCell(new Label(3, x, finishTrain.get(i).receivingTrackNo));   //寫入receiving track No
+							
+				Integer numberOfBlocks=0;   //block種類數量
+				//Integer numberOfCars=0;   //car總數量
+				String tmpString = new String("");   //儲存輸出用destination of blocks
+				for(int j=0 ; j<b.blockLength ; j++){   //寫入車廂種類數量
+					int c = Integer.parseInt(countBlocks(b.blockValues[j], finishTrain.get(i)));
+					if(c!=0){
+						numberOfBlocks++;
+						//numberOfCars+=c;
+						tmpString+=b.blockValues[j] + "(" + c + ");";
+					}
+				}
+				writeSheet.addCell(new Label(4, x, numberOfBlocks.toString()));
+				writeSheet.addCell(new Label(5, x, String.valueOf(finishTrain.get(i).inBoundBlock.size())));
+				writeSheet.addCell(new Label(6, x, tmpString));
+				writeSheet.addCell(new Label(7, x, String.valueOf(finishTrain.get(i).currentTime)));
+				writeSheet.addCell(new Label(8, x, String.valueOf(finishTrain.get(i).currentTime + 
+						(Constants.HUMP_RATE*(1.0f*finishTrain.get(i).inBoundBlock.size())))));
+			}
+			label = null;
+			writeWorkBook.write();   //最後的最後，在一次將資料寫入檔案內即可，這是一次性寫入，第二次寫入會無效
+			writeWorkBook.close();   //關檔是好習慣
+			readWorkBook.close();   //關檔是好習慣
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (RowsExceededException e) {		
+			e.printStackTrace();
+		} catch (WriteException e) {
+			e.printStackTrace();
+		} catch (BiffException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 	
 	
 	/**
@@ -146,35 +209,41 @@ public class ReceivingArea {
 	/**
 	 * 設Receiving Area也有一個引擎在控制火車的進入 
 	 */
-	class ReceivingTask extends TimerTask{   //FIFO，來的就先拉
+	class ReceivingTask extends TimerTask{   //FIFO，來的就先拉(這邊之後要改掉)
+		int count;   //算receiving track是否都為空了當沒有車再進來的時候
 		public void run(){
+			count = 0;
 			for(ReceivingTrack rt : receivingTrack){
 				if(rt.isEmpty){   //如果receiving track是空的話
 					if(trainSet.size()!=0){   //還有火車可以拉
 						rt.existTrain = trainSet.get(0);   //加入最先來的火車
 						trainSet.remove(0);   //將加進去的火車從trainSet刪除
 						rt.isEmpty = false;
+						rt.existTrain.currentTime = (rt.existTrain.arrivalTimePlusDay()+Constants.TECHNICAL_INSPECTION_TIME);   //進站需要檢查時間30分鐘
 					}
-					else{   //沒火車了
-						timer.cancel();
-						System.out.println("No arrival train.");
-						break;
-					}
+					else   //沒火車了
+						count++;   //track沒火車,count+1
 				}
+			}
+			if(count == receivingTrack.length){   //當receiving track都為空且當沒有車再進來的時候
+				timer.cancel();   //receivingTask 可以結束
+				System.out.println("No arrival train.");
+				inboundTrainInfoOutput();
 			}
 		}
 	}
 	
 	/**
-	 * 找出最先來的火車，有火車的話就回傳Train，沒有的話就回傳null
+	 * 找出最先來的火車，有火車的話就回傳Train，沒有的話就回傳null,
+	 * 要看hump的時間
 	 */
-	public Train firstComeTrain(){
-		double minTime = Double.MAX_VALUE;
+	public Train firstComeTrain(Double humpTime){
+		double minTime = humpTime;
 		int trackNo=-1;   //最先來火車的火車軌道
 		int i=0;
 		for(ReceivingTrack rt : receivingTrack){
-			if(rt.isEmpty==false && rt.existTrain.arrivalTimePlusDay()<minTime){   //track有火車且最先來
-				minTime = rt.existTrain.arrivalTimePlusDay();
+			if(rt.isEmpty==false && rt.existTrain.currentTime<minTime){   //track有火車且最先來
+				minTime = rt.existTrain.currentTime;
 				trackNo = i;   //設定最先來的火車軌道是第幾個			
 			}
 			i++;
@@ -183,7 +252,12 @@ public class ReceivingArea {
 			Train tmp = receivingTrack[trackNo].existTrain;
 			receivingTrack[trackNo].isEmpty = true;   //讓那個track可以在接車
 			receivingTrack[trackNo].existTrain = null;   //讓那個軌道存在的train回歸null
-			return tmp;		
+			tmp.receivingTrackNo = "R" + String.valueOf(trackNo+1);   //要加1的原因是因為track命名是從R1開始
+			if(humpTime!=Double.MAX_VALUE)   //因為只有第一次拉的時候,hump time為極大值
+				tmp.currentTime = humpTime;
+			tmp.currentTime += Constants.HUMP_INTERVAL;   //被hump拉出去的現在時間即為Sheet No.2 inbound_train_info的starting time of humping job
+			finishTrain.add(tmp);
+			return tmp;
 		}
 		else
 			return null;

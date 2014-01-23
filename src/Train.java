@@ -1,8 +1,9 @@
 import java.util.ArrayList;
 
 public class Train {
-	String day, inBoundTrainId, arrivalTime, departureTime;
+	String day, inBoundTrainId, arrivalTime, departureTime, receivingTrackNo;
 	ArrayList<String> inBoundBlock;
+	Double currentTime;   //現在進行的時間
 	
 	public Train(){
 		day = new String();
@@ -10,6 +11,7 @@ public class Train {
 		arrivalTime = new String();
 		departureTime = new String();
 		inBoundBlock = new ArrayList<String>();
+		currentTime = new Double(0.0f);
 	}
 	
 	/**
