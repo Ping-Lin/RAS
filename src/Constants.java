@@ -16,7 +16,7 @@ public interface Constants {
 	double HUMP_RATE = (1*1.0f/2.5)/60;   // 每拉一節車要多久，單位:小時
 	double HUMP_INTERVAL = 8*1.0f/60; //單位:小時
 	double TECHNICAL_INSPECTION_TIME = 30*1.0f/60;   //單位:小時
-	
+	double COMBINING_BLOCKS_PER_TRACK = 3*1.0f/60;   //一個track的每有一block結合所需時間,單位:小時
 	/*
 	 * case 5
 	 */
